@@ -119,6 +119,7 @@ router.get("/assignments", authenticateAdmin, listAssignments);
 router.put("/assignments/:id", authenticateAdmin, upload.single("pdf"), updateAssignment);
 router.delete("/assignments/:id", authenticateAdmin, deleteAssignment);
 router.get("/assignments/submissions", authenticateAdmin, listSubmissions);
+// Then update the delete submission route:
 router.delete("/assignments/submissions/:id", authenticateAdmin, async (req, res) => {
   try {
     const submissionId = req.params.id;
@@ -133,14 +134,21 @@ router.delete("/assignments/submissions/:id", authenticateAdmin, async (req, res
       });
     }
     
-    // Optionally, you might want to delete the uploaded file
-    // if (deletedSubmission.fileUrl) {
-    //   // Delete file from storage
-    //   const filePath = path.join(__dirname, '..', 'uploads', deletedSubmission.fileUrl);
-    //   if (fs.existsSync(filePath)) {
-    //     fs.unlinkSync(filePath);
-    //   }
-    // }
+    // Delete the uploaded file if it exists
+    if (deletedSubmission.fileUrl) {
+      try {
+        // Extract filename from URL
+        const filename = deletedSubmission.fileUrl.split('/').pop();
+        const filePath = path.join(__dirname, '..', 'uploads', filename);
+        
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (fileError) {
+        console.error('Error deleting file:', fileError);
+        // Continue even if file deletion fails
+      }
+    }
     
     res.status(200).json({
       success: true,
