@@ -15,7 +15,7 @@ const searchRoutes = require("./routes/searchRoutes");
 
 // Configuration
 const PORT = 8080;
-const FRONTEND_ORIGIN = process.env.CORS_ORIGIN || '*';
+const FRONTEND_ORIGIN = process.env.CORS_ORIGIN || 'https://www.cs-islamhatem.com';
 const MONGO_URI = process.env.MONGO_URI || '*';
 
 // Initialize Server
@@ -25,7 +25,7 @@ const server = http.createServer(app);
 // Enhanced Socket.IO Configuration
 const io = new Server(server, {
   cors: {
-    origin: [FRONTEND_ORIGIN, '*'],
+    origin: [FRONTEND_ORIGIN, 'https://www.cs-islamhatem.com'],
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -44,14 +44,14 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: ['*', '*'],
+  origin: [FRONTEND_ORIGIN, 'https://www.cs-islamhatem.com'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
   res.header('Access-Control-Allow-Credentials', 'true');
   next();
 });
