@@ -22,10 +22,33 @@ const MONGO_URI = process.env.MONGO_URI || '*';
 const app = express();
 const server = http.createServer(app);
 
+// CORS Configuration - UPDATED
+const allowedOrigins = [
+  "https://www.cs-islamhatem.com",
+  "https://cs-eslam-hatem.fly.dev"
+];
+
+// Enhanced CORS middleware - Moved to top
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Allow preflight requests for ALL routes
+app.options("*", cors());
+
 // Enhanced Socket.IO Configuration
 const io = new Server(server, {
   cors: {
-    origin: [FRONTEND_ORIGIN, 'https://www.cs-islamhatem.com'],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -43,23 +66,17 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
-app.use(cors({
-  origin: [FRONTEND_ORIGIN, 'https://www.cs-islamhatem.com'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
-});
+// REMOVED the problematic CORS override block:
+// ❌ REMOVED THIS:
+// app.use((req, res, next) => {
+//   res.header('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
+//   res.header('Access-Control-Allow-Credentials', 'true');
+//   next();
+// });
 
 const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10 GB in bytes
 });
-
 
 const limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -70,7 +87,6 @@ app.use(limiter);
 
 app.use(express.json({ limit: '10gb' }));
 app.use(express.urlencoded({ limit: '10gb', extended: true }));
-
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -672,6 +688,7 @@ socket.emit("room-created", responseData); // Make sure this line exists
   });
 });
 
+// Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes')); // Islam Hatem only
@@ -682,16 +699,9 @@ app.use('/api/live', require('./routes/liveRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/help', require('./routes/helpRoutes'));
 app.use('/api/assistant', require("./routes/assistantRoutes"));
-app.use('/api/courses', require("./routes/courseRoutes"));
-app.use('/api/lessons', require("./routes/lessonRoutes"));
-app.use('/api/assignments', require("./routes/assignmentRoutes"));
 app.use('/api/payment-requests', require('./routes/paymentRequestRoutes'));
-
-app.use('/api/live', require("./routes/liveRoutes"));
-app.use('/api/chat', require("./routes/chatRoutes"));
-app.use('/api/help', require("./routes/helpRoutes"));
 app.use('/api/quizzes', require("./routes/quizRoutes"));
-
+app.use("/api/search", searchRoutes);
 
 // Active rooms endpoint
 app.get('/api/active-rooms', (req, res) => {
@@ -769,7 +779,7 @@ server.listen(8080, () => {
     📡 Socket.IO: ws://0.0.0.0:${PORT}/socket.io/
     🎮 PeerJS: ://0.0.0.0:${PORT}/peerjs
     💬 Chat: ws://0.0.0.0:${PORT}
-    🌐 CORS Origin: ${FRONTEND_ORIGIN}
+    🌐 CORS Origins: ${allowedOrigins.join(', ')}
     🏫 Active rooms: ${Object.keys(activeRooms).length}
   `);
 });
@@ -784,6 +794,3 @@ process.on('SIGTERM', () => {
     });
   });
 });
-
-
-
