@@ -22,6 +22,27 @@ const MONGO_URI = process.env.MONGO_URI || '*';
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  "https://www.cs-islamhatem.com",
+  "https://cs-eslam-hatem.fly.dev"
+];
+
+// Enhanced CORS middleware - Moved to top
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+
+
 // Enhanced Socket.IO Configuration
 const io = new Server(server, {
   cors: {
@@ -43,18 +64,7 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
-app.use(cors({
-  origin: [FRONTEND_ORIGIN, 'https://www.cs-islamhatem.com'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
-});
 
 const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10 GB in bytes
