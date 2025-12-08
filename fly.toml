@@ -22,3 +22,6 @@ primary_region = 'iad'
   cpus = 8
   memory_mb = 16384
 
+[[mounts]]
+source = "storage"
+destination = "/data"
