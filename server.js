@@ -22,24 +22,7 @@ const MONGO_URI = process.env.MONGO_URI || '*';
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  "https://www.cs-islamhatem.com",
-  "https://cs-eslam-hatem.fly.dev"
-];
 
-// Enhanced CORS middleware - Moved to top
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
 
 
 
