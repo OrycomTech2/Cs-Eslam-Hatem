@@ -22,10 +22,6 @@ const MONGO_URI = process.env.MONGO_URI || '*';
 const app = express();
 const server = http.createServer(app);
 
-
-
-
-
 // Enhanced Socket.IO Configuration
 const io = new Server(server, {
   cors: {
@@ -47,7 +43,18 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
+app.use(cors({
+  origin: ['*', 'https://www.cs-islamhatem.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
 const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10 GB in bytes
