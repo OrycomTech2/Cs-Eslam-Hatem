@@ -20,5 +20,5 @@ primary_region = 'iad'
   memory = '50gb'
   cpu_kind = 'shared'
   cpus = 8
-  memory_mb = 51200
+  memory_mb = 16384
 
