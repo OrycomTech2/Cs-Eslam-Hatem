@@ -669,12 +669,43 @@ exports.createLesson = async (req, res) => {
     console.log("📥 Lesson create request body:", req.body);
     console.log("📂 Uploaded files:", req.files);
 
-    if (req.files) {
-      console.log("📁 Files structure:", {
-        material: req.files.material ? req.files.material[0] : null,
-        video: req.files.video ? req.files.video[0] : null,
-        thumbnail: req.files.thumbnail ? req.files.thumbnail[0] : null,
-      });
+    let materialUrl = null;
+    let videoUrl = null;
+    let thumbnailUrl = null;
+    let materialPublicUrl = null;
+    let videoPublicUrl = null;
+    let thumbnailPublicUrl = null;
+
+    // Upload files to R2
+    if (req.files?.material) {
+      const fileName = `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/materials/${Date.now()}-${req.files.material[0].originalname}`;
+      materialUrl = await uploadToR2(
+        req.files.material[0].buffer,
+        fileName,
+        req.files.material[0].mimetype
+      );
+      materialPublicUrl= `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/materials/${Date.now()}-${req.files.material[0].originalname}`;
+    }
+
+    if (req.files?.video) {
+      const fileName = `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/videos/${Date.now()}-${req.files.video[0].originalname}`;
+      videoUrl = await uploadToR2(
+        req.files.video[0].buffer,
+        fileName,
+        req.files.video[0].mimetype
+      );
+      videoPublicUrl= `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/videos/${Date.now()}-${req.files.video[0].originalname}`;
+    }
+
+    if (req.files?.thumbnail) {
+      const fileName = `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/thumbnails/${Date.now()}-${req.files.thumbnail[0].originalname}`;
+      thumbnailUrl = await uploadToR2(
+        req.files.thumbnail[0].buffer,
+        fileName,
+        req.files.thumbnail[0].mimetype
+      );
+      thumbnailPublicUrl= `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/thumbnails/${Date.now()}-${req.files.thumbnail[0].originalname}`;
+
     }
 
     const lesson = new Lesson({
@@ -682,10 +713,10 @@ exports.createLesson = async (req, res) => {
       description: req.body.description,
       type: req.body.type,
       price: req.body.price || 0,
-      course: req.body.course, // 👈 the courseId
-      material: req.files?.material ? req.files.material[0].filename : null,
-      video: req.files?.video ? req.files.video[0].filename : null,
-      thumbnail: req.files?.thumbnail ? req.files.thumbnail[0].filename : null,
+      course: req.body.course,
+      material: materialPublicUrl,
+      video: videoPublicUrl,
+      thumbnail: thumbnailPublicUrl,
     });
 
     await lesson.save();
@@ -703,7 +734,6 @@ exports.createLesson = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // ============================
 // Update Lesson
 // ============================
@@ -719,9 +749,51 @@ exports.updateLesson = async (req, res) => {
       course,
     };
 
-    if (req.files?.material) updateFields.material = req.files.material[0].filename;
-    if (req.files?.video) updateFields.video = req.files.video[0].filename;
-    if (req.files?.thumbnail) updateFields.thumbnail = req.files.thumbnail[0].filename;
+    // Get current lesson to delete old files
+    const currentLesson = await Lesson.findById(req.params.id);
+
+    // Upload new files to R2 and update URLs
+    if (req.files?.material) {
+      const fileName = `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/materials/${Date.now()}-${req.files.material[0].originalname}`;
+      await uploadToR2(
+        req.files.material[0].buffer,
+        fileName,
+        req.files.material[0].mimetype
+      );
+      updateFields.material = fileName;
+      // Delete old material from R2
+      if (currentLesson?.material) {
+        await deleteFromR2(currentLesson.material).catch(console.error);
+      }
+    }
+
+    if (req.files?.video) {
+      const fileName = `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/videos/${Date.now()}-${req.files.video[0].originalname}`;
+      await uploadToR2(
+        req.files.video[0].buffer,
+        fileName,
+        req.files.video[0].mimetype
+      );
+      updateFields.video = fileName;
+      // Delete old video from R2
+      if (currentLesson?.video) {
+        await deleteFromR2(currentLesson.video).catch(console.error);
+      }
+    }
+
+    if (req.files?.thumbnail) {
+      const fileName = `https://pub-291401bda2d0492a874e98b69b6cc9a7.r2.dev/lessons/thumbnails/${Date.now()}-${req.files.thumbnail[0].originalname}`;
+      await uploadToR2(
+        req.files.thumbnail[0].buffer,
+        fileName,
+        req.files.thumbnail[0].mimetype
+      );
+      updateFields.thumbnail = fileName;
+      // Delete old thumbnail from R2
+      if (currentLesson?.thumbnail) {
+        await deleteFromR2(currentLesson.thumbnail).catch(console.error);
+      }
+    }
 
     const lesson = await Lesson.findByIdAndUpdate(
       req.params.id,
@@ -737,14 +809,24 @@ exports.updateLesson = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 // ============================
 // Delete Lesson
 // ============================
 exports.deleteLesson = async (req, res) => {
   try {
-    const lesson = await Lesson.findByIdAndDelete(req.params.id);
+    const lesson = await Lesson.findById(req.params.id);
     if (!lesson) return res.status(404).json({ success: false, message: "Lesson not found" });
+
+    // Delete files from R2
+    if (lesson.material) {
+      await deleteFromR2(lesson.material).catch(console.error);
+    }
+    if (lesson.video) {
+      await deleteFromR2(lesson.video).catch(console.error);
+    }
+    if (lesson.thumbnail) {
+      await deleteFromR2(lesson.thumbnail).catch(console.error);
+    }
 
     // ✅ Remove lesson from its course
     await Course.findByIdAndUpdate(
@@ -752,42 +834,166 @@ exports.deleteLesson = async (req, res) => {
       { $pull: { lessons: lesson._id } }
     );
 
+    // Delete lesson document
+    await Lesson.findByIdAndDelete(req.params.id);
+
     res.json({ success: true, message: "Lesson deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 // ============================
 // List Lessons
 // ============================
 exports.listLessons = async (req, res) => {
   try {
-    const lessons = await Lesson.find().populate("course", "title");
-    const lessonsWithFiles = lessons.map(lesson => ({
-      ...lesson._doc,
-      material: lesson.material ? `/uploads/${lesson.material}` : null,
-      video: lesson.video ? `/uploads/${lesson.video}` : null,
-      thumbnail: lesson.thumbnail ? `/uploads/${lesson.thumbnail}` : null,
-    }));
-
-    res.json({ success: true, data: lessonsWithFiles });
+    console.log("🔍 DEBUG: Starting listLessons function");
+    console.log("🔍 DEBUG: Request query params:", req.query);
+    console.log("🔍 DEBUG: Request URL:", req.originalUrl);
+    
+    // Check if we have a course filter
+    const courseFilter = req.query.course;
+    if (courseFilter) {
+      console.log(`🔍 DEBUG: Filtering by course ID: ${courseFilter}`);
+    }
+    
+    // Build query
+    const query = {};
+    if (courseFilter) {
+      query.course = courseFilter;
+      console.log(`🔍 DEBUG: Using query:`, query);
+    }
+    
+    // Fetch lessons with population
+    console.log("🔍 DEBUG: Fetching lessons from database...");
+    const lessons = await Lesson.find(query).populate("course", "title");
+    
+    console.log(`🔍 DEBUG: Found ${lessons.length} lessons`);
+    
+    if (lessons.length === 0) {
+      console.log("⚠️ WARNING: No lessons found in database");
+      console.log(`⚠️ Course filter was: ${courseFilter || 'none'}`);
+    }
+    
+    // Log each lesson's details for debugging
+    lessons.forEach((lesson, index) => {
+      console.log(`\n📋 DEBUG: Lesson ${index + 1} details:`);
+      console.log(`  ID: ${lesson._id}`);
+      console.log(`  Title: ${lesson.title}`);
+      console.log(`  Course ID: ${lesson.course?._id || lesson.course}`);
+      console.log(`  Course Title: ${lesson.course?.title || 'No course'}`);
+      console.log(`  Material URL: ${lesson.material || 'None'}`);
+      console.log(`  Video URL: ${lesson.video || 'None'}`);
+      console.log(`  Thumbnail URL: ${lesson.thumbnail || 'None'}`);
+      console.log(`  Material type: ${typeof lesson.material}`);
+      console.log(`  Video type: ${typeof lesson.video}`);
+      console.log(`  Thumbnail type: ${typeof lesson.thumbnail}`);
+      
+      // Check if URLs are R2 URLs
+      if (lesson.material) {
+        console.log(`  Material is R2 URL: ${lesson.material.includes('r2.dev') || lesson.material.includes('cloudflarestorage.com')}`);
+      }
+      if (lesson.video) {
+        console.log(`  Video is R2 URL: ${lesson.video.includes('r2.dev') || lesson.video.includes('cloudflarestorage.com')}`);
+      }
+      if (lesson.thumbnail) {
+        console.log(`  Thumbnail is R2 URL: ${lesson.thumbnail.includes('r2.dev') || lesson.thumbnail.includes('cloudflarestorage.com')}`);
+      }
+    });
+    
+    // Transform lessons
+    console.log("\n🔍 DEBUG: Transforming lessons...");
+    const lessonsWithVerifiedUrls = lessons.map(lesson => {
+      const transformed = {
+        ...lesson._doc,
+        material: lesson.material || null,
+        video: lesson.video || null,
+        thumbnail: lesson.thumbnail || null,
+      };
+      
+      console.log(`  Transformed lesson "${lesson.title}":`);
+      console.log(`    Material: ${transformed.material}`);
+      console.log(`    Video: ${transformed.video}`);
+      console.log(`    Thumbnail: ${transformed.thumbnail}`);
+      
+      return transformed;
+    });
+    
+    // Log final response structure
+    console.log("\n🔍 DEBUG: Sending response...");
+    console.log(`  Response structure: { success: true, data: array(${lessonsWithVerifiedUrls.length}) }`);
+    console.log("  First lesson in response:", lessonsWithVerifiedUrls[0] ? {
+      id: lessonsWithVerifiedUrls[0]._id,
+      title: lessonsWithVerifiedUrls[0].title,
+      material: lessonsWithVerifiedUrls[0].material,
+      video: lessonsWithVerifiedUrls[0].video,
+      thumbnail: lessonsWithVerifiedUrls[0].thumbnail
+    } : 'No lessons');
+    
+    // Send response
+    res.json({ 
+      success: true, 
+      data: lessonsWithVerifiedUrls,
+      debug: {
+        totalLessons: lessons.length,
+        filteredByCourse: courseFilter || 'none',
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+    console.log("✅ DEBUG: Response sent successfully");
+    
   } catch (err) {
-    console.error("❌ Error listing lessons:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("❌ ERROR in listLessons:");
+    console.error("  Error message:", err.message);
+    console.error("  Error stack:", err.stack);
+    console.error("  Error name:", err.name);
+    
+    // Additional error context
+    if (err.name === 'CastError') {
+      console.error("  🚨 Cast Error - Likely invalid ObjectId in query");
+      console.error("  Query was:", req.query);
+    }
+    
+    if (err.name === 'ValidationError') {
+      console.error("  🚨 Validation Error");
+      console.error("  Errors:", err.errors);
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      message: err.message,
+      errorType: err.name,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 };
-
-
-
 
 // Get single lesson
 exports.getLessonById = async (req, res) => {
   try {
+    console.log("🔍 DEBUG getLessonById: Requested lesson ID:", req.params.id);
+    
     const lesson = await Lesson.findById(req.params.id).populate("course");
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+    
+    console.log("🔍 DEBUG getLessonById: Found lesson:", {
+      id: lesson._id,
+      title: lesson.title,
+      material: lesson.material,
+      video: lesson.video,
+      thumbnail: lesson.thumbnail
+    });
+    
+    // Check if URLs are R2 URLs
+    if (lesson.material) {
+      console.log("🔍 Material is R2 URL:", lesson.material.includes('r2.dev'));
+    }
+    
+    // Return lesson with URLs
     res.json(lesson);
   } catch (err) {
+    console.error("❌ getLessonById error:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -798,16 +1004,38 @@ exports.uploadLessonFiles = async (req, res) => {
     const lessonId = req.params.id;
     const files = req.files;
 
-    // Example: update your lesson in DB with file paths
     const updatedFields = {};
-    if (files.material) updatedFields.material = "/uploads/" + files.material[0].filename;
-    if (files.video) updatedFields.video = "/uploads/" + files.video[0].filename;
-    if (files.thumbnail) updatedFields.thumbnail = "/uploads/" + files.thumbnail[0].filename;
+    
+    if (files.material) {
+      const fileName = `lessons/materials/${Date.now()}-${files.material[0].originalname}`;
+      updatedFields.material = await uploadToR2(
+        files.material[0].buffer,
+        fileName,
+        files.material[0].mimetype
+      );
+    }
+    
+    if (files.video) {
+      const fileName = `lessons/videos/${Date.now()}-${files.video[0].originalname}`;
+      updatedFields.video = await uploadToR2(
+        files.video[0].buffer,
+        fileName,
+        files.video[0].mimetype
+      );
+    }
+    
+    if (files.thumbnail) {
+      const fileName = `lessons/thumbnails/${Date.now()}-${files.thumbnail[0].originalname}`;
+      updatedFields.thumbnail = await uploadToR2(
+        files.thumbnail[0].buffer,
+        fileName,
+        files.thumbnail[0].mimetype
+      );
+    }
 
     // Update lesson in DB
     const lesson = await Lesson.findByIdAndUpdate(lessonId, updatedFields, { new: true });
 
-    // ✅ Return JSON so frontend can call res.json() safely
     return res.status(200).json({
       success: true,
       message: "Files uploaded successfully",
@@ -834,7 +1062,6 @@ exports.getLessons = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 /* ========================
    ❓ Quizzes
